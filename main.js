@@ -174,11 +174,18 @@ async function runInference() {
     // 1) Continue to show a quick status update
     document.getElementById('status').textContent = 'Inference complete!';
 
-    // 2) Append inference to our "logResults" container
+    // 2) Prepend the new result at the top of "logResults" 
     const logContainer = document.getElementById('logResults');
     const p = document.createElement('p');
     p.textContent = `Inference result: ${JSON.stringify(Array.from(predictions))}`;
-    logContainer.appendChild(p);
+
+    // Insert the new paragraph as the first child (so the newest appears at top)
+    if (logContainer.firstChild) {
+      logContainer.insertBefore(p, logContainer.firstChild);
+    } else {
+      // If no child yet, just append
+      logContainer.appendChild(p);
+    }
 
     console.log('[runInference] Predictions:', predictions);
 
@@ -187,7 +194,9 @@ async function runInference() {
     document.getElementById('status').textContent = `Error: ${err}`;
 
     // Dispose on error
-    if (inputTensor) inputTensor.dispose();
+    if (inputTensor) {
+      inputTensor.dispose();
+    }
   }
 }
 
