@@ -111,8 +111,21 @@ async function stopCollectingData() {
     }
     console.log(`[stopCollectingData] Padded to ${accelData.length} samples.`);
   } else if (accelData.length > TARGET_SAMPLES) {
-    accelData = accelData.slice(-TARGET_SAMPLES);
-    console.log(`[stopCollectingData] Truncated to ${accelData.length} samples.`);
+    // If you collected more than TARGET_SAMPLES, downsample
+    const downsampled = [];
+    
+    // Calculate a floating "step" so we spread picks across entire data
+    const step = accelData.length / TARGET_SAMPLES;
+    
+    // For each of the 52 "slots", pick the appropriate sample index
+    for (let i = 0; i < TARGET_SAMPLES; i++) {
+      // Round down (or round to nearest) to get an integer index
+      const index = Math.floor(i * step);
+      downsampled.push(accelData[index]);
+    }
+    
+    accelData = downsampled;
+    console.log(`[stopCollectingData] Downsampled to ${accelData.length} samples.`);
   }
 
   document.getElementById('status').textContent =
