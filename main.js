@@ -4,194 +4,217 @@
 let model = null;            // Holds the loaded TF.js model
 let accelData = [];          // Stores the raw accelerometer data
 const TARGET_SAMPLES = 52;   // 52 samples total
-const COLLECTION_TIME = 2000; // 2 seconds in milliseconds
-
-// Flag to control continuous collection (if you ever want to stop)
-let continueLoop = true;
+const COLLECTION_TIME = 2000; // 2 seconds
+let continueLoop = true;     // Control variable to stop the loop if desired
 
 /*****************************************************
- * Request Motion Permission (for iOS >= 13)
+ * requestMotionPermission() 
+ * (For iOS >= 13)
  *****************************************************/
 async function requestMotionPermission() {
+  console.log('[requestMotionPermission] Checking for iOS permission...');
   if (
     typeof DeviceMotionEvent !== 'undefined' &&
     typeof DeviceMotionEvent.requestPermission === 'function'
   ) {
     try {
+      console.log('[requestMotionPermission] Requesting permission...');
       const response = await DeviceMotionEvent.requestPermission();
       if (response === 'granted') {
-        console.log('DeviceMotion permission granted (iOS).');
+        console.log('[requestMotionPermission] Permission granted.');
         return true;
       } else {
-        console.warn('DeviceMotion permission denied (iOS).');
+        console.warn('[requestMotionPermission] Permission denied.');
         return false;
       }
     } catch (err) {
-      console.error('Error requesting DeviceMotion permission:', err);
+      console.error('[requestMotionPermission] Error requesting permission:', err);
       return false;
     }
   } else {
-    // Non-iOS or iOS < 13
+    // Non-iOS or older iOS
+    console.log('[requestMotionPermission] No special permission required on this device.');
     return true;
   }
 }
 
 /*****************************************************
- * Load the TF.js Model (converted from .h5)
+ * loadModel()
  *****************************************************/
 async function loadModel() {
   try {
-    // Make sure this path is correct for where your model.json is located
+    console.log('[loadModel] Loading model from: model_web/model.json');
     model = await tf.loadLayersModel('model_web/model.json');
-    console.log('Model loaded successfully.');
+    console.log('[loadModel] Model loaded successfully:', model);
   } catch (error) {
-    console.error('Error loading model:', error);
+    console.error('[loadModel] Error loading model:', error);
+    model = null;
   }
 }
 
 /*****************************************************
- * startLoop()
- * - Called once after permission + model load
- * - Begins the continuous 2-second data collection cycles
+ * startContinuousLoop()
+ * - Kicks off the first data collection cycle
  *****************************************************/
-function startLoop() {
-  console.log('Starting continuous loop...');
-  // Make sure we haven't turned off the loop
-  if (!continueLoop) return;
-
-  startCollectingData(); 
+function startContinuousLoop() {
+  console.log('[startContinuousLoop] Initiating continuous capture loop...');
+  continueLoop = true;
+  startCollectingData();
 }
 
 /*****************************************************
- * Start Accelerometer Collection (for 2 seconds)
+ * stopContinuousLoop()
+ * - Allows you to stop the loop if needed
+ *****************************************************/
+function stopContinuousLoop() {
+  console.log('[stopContinuousLoop] Stopping continuous capture loop...');
+  continueLoop = false;
+  // Also remove any devicemotion listener if currently active
+  window.removeEventListener('devicemotion', handleMotionEvent, true);
+  document.getElementById('status').textContent = 'Loop stopped.';
+}
+
+/*****************************************************
+ * startCollectingData()
+ * - Collect data for 2 seconds, then stop
  *****************************************************/
 function startCollectingData() {
-  console.log('startCollectingData(): Resetting accelData and starting listener...');
-  accelData = [];
+  if (!continueLoop) {
+    console.log('[startCollectingData] continueLoop = false, so not starting.');
+    return;
+  }
 
+  console.log('[startCollectingData] Reset accelData and add devicemotion listener.');
+  accelData = [];
   window.addEventListener('devicemotion', handleMotionEvent, true);
 
-  // After 2 seconds, stop collecting and run inference
+  // After 2 seconds, stop and run inference
   setTimeout(() => {
     stopCollectingData();
   }, COLLECTION_TIME);
 }
 
 /*****************************************************
- * Stop Accelerometer Collection
+ * stopCollectingData()
+ * - Called after 2 seconds
  *****************************************************/
-function stopCollectingData() {
-  console.log('stopCollectingData(): Removing devicemotion listener.');
+async function stopCollectingData() {
+  console.log('[stopCollectingData] Removing devicemotion listener.');
   window.removeEventListener('devicemotion', handleMotionEvent, true);
 
-  const numSamples = accelData.length;
-  console.log(`Collected ${numSamples} samples in 2s.`);
-
-  // Adjust sample count to exactly TARGET_SAMPLES
-  if (numSamples < TARGET_SAMPLES) {
-    // Zero-pad
+  // Pad or truncate to EXACTLY 52 samples
+  console.log(`[stopCollectingData] Collected ${accelData.length} samples.`);
+  if (accelData.length < TARGET_SAMPLES) {
     while (accelData.length < TARGET_SAMPLES) {
       accelData.push({ x: 0, y: 0, z: 0 });
     }
-    console.log(`Padded from ${numSamples} to ${accelData.length} samples.`);
-  } else if (numSamples > TARGET_SAMPLES) {
-    // Truncate
+    console.log(`[stopCollectingData] Padded to ${accelData.length} samples.`);
+  } else if (accelData.length > TARGET_SAMPLES) {
     accelData = accelData.slice(-TARGET_SAMPLES);
-    console.log(`Truncated from ${numSamples} to ${accelData.length} samples.`);
+    console.log(`[stopCollectingData] Truncated to ${accelData.length} samples.`);
   }
 
-  document.getElementById('status').textContent = 
+  document.getElementById('status').textContent =
     `Collected ${accelData.length} samples. Running inference...`;
 
-  // Run inference asynchronously
-  runInference().then(() => {
-    // Once inference is done, immediately start the next 2-second cycle
-    if (continueLoop) {
-      startCollectingData();
-    }
-  });
+  // Run inference
+  await runInference();
+
+  // If continueLoop is still true, start another cycle
+  if (continueLoop) {
+    console.log('[stopCollectingData] Starting next 2s cycle...');
+    startCollectingData();
+  } else {
+    console.log('[stopCollectingData] continueLoop=false, so no more cycles.');
+  }
 }
 
 /*****************************************************
- * Handle DeviceMotion
+ * handleMotionEvent()
+ * - Triggered by devicemotion
  *****************************************************/
 function handleMotionEvent(event) {
-  const { x, y, z } = event.accelerationIncludingGravity;
+  const { x, y, z } = event.accelerationIncludingGravity || {};
+  
+  // If x,y,z are null/undefined on some devices, fallback to 0
+  accelData.push({
+    x: x || 0,
+    y: y || 0,
+    z: z || 0
+  });
 
-  // Push each reading
-  accelData.push({ x, y, z });
-
-  // Show how many samples so far
   document.getElementById('status').textContent =
-    `Collecting samples... (${accelData.length})`;
+    `Collecting... Samples so far: ${accelData.length}`;
 }
 
 /*****************************************************
- * Run Inference
+ * runInference()
+ * - Builds input tensor, calls model.predict
  *****************************************************/
 async function runInference() {
   if (!model) {
-    console.warn('Model not loaded yet.');
+    console.warn('[runInference] Model is not loaded. Cannot run inference.');
     document.getElementById('status').textContent = 'Model not loaded.';
     return;
   }
 
-  // Build data array of shape [52, 3, 1]
+  // Build array of shape [52, 3, 1]
   const dataArray = accelData.map(d => [[d.x], [d.y], [d.z]]);
 
-  // Create tensor of shape [52, 3, 1]
-  let inputTensor = tf.tensor3d(dataArray);
+  let inputTensor = tf.tensor3d(dataArray); // shape [52, 3, 1]
+  console.log('[runInference] inputTensor shape:', inputTensor.shape);
 
-  // Reshape to [1, 52, 3, 1]
-  inputTensor = inputTensor.reshape([1, TARGET_SAMPLES, 3, 1]);
+  inputTensor = inputTensor.reshape([1, TARGET_SAMPLES, 3, 1]); 
+  console.log('[runInference] Reshaped to:', inputTensor.shape);
 
-  // Predict
-  const outputTensor = model.predict(inputTensor);
-  const predictions = await outputTensor.data();
+  try {
+    const outputTensor = model.predict(inputTensor);
+    const predictions = await outputTensor.data();
 
-  // Cleanup
-  outputTensor.dispose();
-  inputTensor.dispose();
+    outputTensor.dispose();
+    inputTensor.dispose();
 
-  console.log('Predictions:', predictions);
-  document.getElementById('status').textContent =
-    'Inference result: ' + JSON.stringify(Array.from(predictions));
+    console.log('[runInference] Predictions:', predictions);
+    document.getElementById('status').textContent =
+      `Inference result: ${JSON.stringify(Array.from(predictions))}`;
+  } catch (err) {
+    console.error('[runInference] Error during model.predict():', err);
+    document.getElementById('status').textContent =
+      `Error during inference: ${err}`;
+    // Dispose inputTensor if error
+    if (inputTensor) inputTensor.dispose();
+  }
 }
 
 /*****************************************************
  * initDemo()
- * - Called once, e.g. at page load or from a button click
+ * - Called (once) from the page:
+ *   - request permission
+ *   - load model
+ *   - start the continuous loop
  *****************************************************/
 async function initDemo() {
-  // 1. iOS motion permission
+  console.log('[initDemo] Called!');
+
+  // 1) iOS motion permission
   const granted = await requestMotionPermission();
   if (!granted) {
     document.getElementById('status').textContent = 
       'Permission for motion denied.';
-    console.warn('Cannot proceed without motion permission.');
+    console.warn('[initDemo] Motion permission denied, stopping.');
     return;
   }
 
-  // 2. Load model
+  // 2) Load model
   document.getElementById('status').textContent = 'Loading model...';
   await loadModel();
   if (!model) {
     document.getElementById('status').textContent = 'Failed to load model.';
+    console.error('[initDemo] Model is null after load attempt, stopping.');
     return;
   }
-  document.getElementById('status').textContent = 'Model loaded. Starting loop...';
-
-  // 3. Start the continuous 2-second data collection loop
-  startLoop();
-}
-
-/*****************************************************
- * (Optional) A function to stop the loop gracefully
- *****************************************************/
-function stopLoop() {
-  console.log('Stop loop called. No further collections will start.');
-  continueLoop = false;
-  // Also remove the devicemotion listener if currently collecting
-  window.removeEventListener('devicemotion', handleMotionEvent, true);
-  document.getElementById('status').textContent = 'Continuous loop stopped.';
+  
+  // 3) Start continuous loop
+  document.getElementById('status').textContent = 'Model loaded. Starting continuous loop...';
+  startContinuousLoop();
 }

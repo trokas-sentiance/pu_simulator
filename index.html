@@ -1,24 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Keras Accelerometer Demo</title>
-  <!-- Load TensorFlow.js via CDN -->
+  <meta charset="utf-8"/>
+  <title>Continuous Accelerometer Inference</title>
+  <!-- TensorFlow.js -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+  <!-- Our main script -->
+  <script src="main.js"></script>
 </head>
-<body>
-  <h1>Keras Accelerometer Demo</h1>
+<body onload="initDemo()">
+  <h1>Continuous Accelerometer Inference</h1>
+  <p>This page will automatically capture 2 seconds of data, run inference, and repeat.</p>
   
-  <p>This demo collects accelerometer data (2s at 26Hz = 52 samples) and runs it through a Keras model in the browser.</p>
-
-  <!-- Button to request permission and start sensor capture -->
-  <body onload="initDemo()">
-    <div id="status"></div>
-    <script src="main.js"></script>
-  </body>
-
-  <!-- Where we display status messages and predictions -->
-  <div id="status">No data yet...</div>
+  <div id="status">Initializing...</div>
   
+  <!-- Optional STOP button to end the loop -->
+  <button onclick="stopContinuousLoop()">Stop Loop</button>
 </body>
 </html>
