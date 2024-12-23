@@ -159,38 +159,34 @@ async function runInference() {
     return;
   }
 
-  // Build array of shape [52, 3, 1]
+  // Build tensor
   const dataArray = accelData.map(d => [[d.x], [d.y], [d.z]]);
-  let inputTensor = tf.tensor3d(dataArray); // shape [52, 3, 1]
-  inputTensor = inputTensor.reshape([1, TARGET_SAMPLES, 3, 1]); 
+  let inputTensor = tf.tensor3d(dataArray).reshape([1, TARGET_SAMPLES, 3, 1]);
 
   try {
+    // Predict
     const outputTensor = model.predict(inputTensor);
     const predictions = await outputTensor.data();
 
     outputTensor.dispose();
     inputTensor.dispose();
 
-    // (Existing) Write to console
+    // 1) Continue to show a quick status update
+    document.getElementById('status').textContent = 'Inference complete!';
+
+    // 2) Append inference to our "logResults" container
+    const logContainer = document.getElementById('logResults');
+    const p = document.createElement('p');
+    p.textContent = `Inference result: ${JSON.stringify(Array.from(predictions))}`;
+    logContainer.appendChild(p);
+
     console.log('[runInference] Predictions:', predictions);
-
-    // (Optional) Still update status if you want
-    document.getElementById('status').textContent =
-      `Inference complete. See below for results.`;
-
-    // (NEW) Append the result to our "inference-results" container
-    inferenceCount++;
-    const resultsDiv = document.getElementById('inference-results');
-    const newResult = document.createElement('p');
-    newResult.textContent = `Inference #${inferenceCount}: ${JSON.stringify(Array.from(predictions))}`;
-    resultsDiv.appendChild(newResult);
 
   } catch (err) {
     console.error('[runInference] Error during model.predict():', err);
-    document.getElementById('status').textContent =
-      `Error during inference: ${err}`;
+    document.getElementById('status').textContent = `Error: ${err}`;
 
-    // Dispose inputTensor if error
+    // Dispose on error
     if (inputTensor) inputTensor.dispose();
   }
 }
