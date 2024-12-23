@@ -12,12 +12,13 @@
   <p>This demo collects accelerometer data (2s at 26Hz = 52 samples) and runs it through a Keras model in the browser.</p>
 
   <!-- Button to request permission and start sensor capture -->
-  <button id="startButton">Start</button>
-  
+  <body onload="initDemo()">
+    <div id="status"></div>
+    <script src="main.js"></script>
+  </body>
+
   <!-- Where we display status messages and predictions -->
   <div id="status">No data yet...</div>
   
-  <!-- Our main script -->
-  <script src="main.js"></script>
 </body>
 </html>

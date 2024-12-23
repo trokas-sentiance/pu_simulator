@@ -1,28 +1,29 @@
 /*****************************************************
  * Global Variables
  *****************************************************/
-let model = null;            // Will hold the loaded TF.js model
-let accelData = [];          // Will store the raw accelerometer data
+let model = null;            // Holds the loaded TF.js model
+let accelData = [];          // Stores the raw accelerometer data
 const TARGET_SAMPLES = 52;   // 52 samples total
-const SAMPLING_RATE = 26;    // 26 Hz
 const COLLECTION_TIME = 2000; // 2 seconds in milliseconds
 
-// We'll store the interval/timeout so we can stop sampling after 2s
-let samplingInterval = null;
+// Flag to control continuous collection (if you ever want to stop)
+let continueLoop = true;
 
 /*****************************************************
  * Request Motion Permission (for iOS >= 13)
  *****************************************************/
 async function requestMotionPermission() {
-  if (typeof DeviceMotionEvent !== 'undefined' &&
-      typeof DeviceMotionEvent.requestPermission === 'function') {
+  if (
+    typeof DeviceMotionEvent !== 'undefined' &&
+    typeof DeviceMotionEvent.requestPermission === 'function'
+  ) {
     try {
       const response = await DeviceMotionEvent.requestPermission();
       if (response === 'granted') {
-        console.log('DeviceMotion permission granted.');
+        console.log('DeviceMotion permission granted (iOS).');
         return true;
       } else {
-        console.warn('DeviceMotion permission denied.');
+        console.warn('DeviceMotion permission denied (iOS).');
         return false;
       }
     } catch (err) {
@@ -30,7 +31,7 @@ async function requestMotionPermission() {
       return false;
     }
   } else {
-    // Non-iOS or older iOS
+    // Non-iOS or iOS < 13
     return true;
   }
 }
@@ -40,8 +41,7 @@ async function requestMotionPermission() {
  *****************************************************/
 async function loadModel() {
   try {
-    // Adjust the path if needed:
-    // e.g., 'model_web/model.json'
+    // Make sure this path is correct for where your model.json is located
     model = await tf.loadLayersModel('model_web/model.json');
     console.log('Model loaded successfully.');
   } catch (error) {
@@ -50,16 +50,28 @@ async function loadModel() {
 }
 
 /*****************************************************
- * Start Accelerometer Collection
+ * startLoop()
+ * - Called once after permission + model load
+ * - Begins the continuous 2-second data collection cycles
+ *****************************************************/
+function startLoop() {
+  console.log('Starting continuous loop...');
+  // Make sure we haven't turned off the loop
+  if (!continueLoop) return;
+
+  startCollectingData(); 
+}
+
+/*****************************************************
+ * Start Accelerometer Collection (for 2 seconds)
  *****************************************************/
 function startCollectingData() {
-  // Reset old data
+  console.log('startCollectingData(): Resetting accelData and starting listener...');
   accelData = [];
 
-  // Listen to devicemotion events
   window.addEventListener('devicemotion', handleMotionEvent, true);
 
-  // Stop collecting after 2 seconds
+  // After 2 seconds, stop collecting and run inference
   setTimeout(() => {
     stopCollectingData();
   }, COLLECTION_TIME);
@@ -69,25 +81,35 @@ function startCollectingData() {
  * Stop Accelerometer Collection
  *****************************************************/
 function stopCollectingData() {
+  console.log('stopCollectingData(): Removing devicemotion listener.');
   window.removeEventListener('devicemotion', handleMotionEvent, true);
 
-  // If we don't have 52 samples yet, it means the sampling rate was too low or the device was slow
-  // We might handle that with zero-padding or repeated samples, etc.
-  if (accelData.length < TARGET_SAMPLES) {
-    // Example: zero-pad until we have 52
+  const numSamples = accelData.length;
+  console.log(`Collected ${numSamples} samples in 2s.`);
+
+  // Adjust sample count to exactly TARGET_SAMPLES
+  if (numSamples < TARGET_SAMPLES) {
+    // Zero-pad
     while (accelData.length < TARGET_SAMPLES) {
       accelData.push({ x: 0, y: 0, z: 0 });
     }
-  } else if (accelData.length > TARGET_SAMPLES) {
-    // If we have more than 52, let's just take the last 52
-    // Or you could do a more sophisticated resample. For now, keep it simple.
+    console.log(`Padded from ${numSamples} to ${accelData.length} samples.`);
+  } else if (numSamples > TARGET_SAMPLES) {
+    // Truncate
     accelData = accelData.slice(-TARGET_SAMPLES);
+    console.log(`Truncated from ${numSamples} to ${accelData.length} samples.`);
   }
 
   document.getElementById('status').textContent = 
     `Collected ${accelData.length} samples. Running inference...`;
 
-  runInference();
+  // Run inference asynchronously
+  runInference().then(() => {
+    // Once inference is done, immediately start the next 2-second cycle
+    if (continueLoop) {
+      startCollectingData();
+    }
+  });
 }
 
 /*****************************************************
@@ -95,12 +117,12 @@ function stopCollectingData() {
  *****************************************************/
 function handleMotionEvent(event) {
   const { x, y, z } = event.accelerationIncludingGravity;
-  
-  // Store a single reading
+
+  // Push each reading
   accelData.push({ x, y, z });
 
-  // Optional: For debugging, show how many samples we have so far
-  document.getElementById('status').textContent = 
+  // Show how many samples so far
+  document.getElementById('status').textContent =
     `Collecting samples... (${accelData.length})`;
 }
 
@@ -114,22 +136,17 @@ async function runInference() {
     return;
   }
 
-  // Build a data array of shape [52, 3, 1]
-  // (Each sample: [x, y, z], then we add an extra dimension for "channels" = 1)
-  const dataArray = accelData.map(d => [[d.x], [d.y], [d.z]]); 
-  // Now dataArray is shape [52, 3, 1] in a JavaScript sense
+  // Build data array of shape [52, 3, 1]
+  const dataArray = accelData.map(d => [[d.x], [d.y], [d.z]]);
 
-  // Convert to Tensor: shape [52, 3, 1]
+  // Create tensor of shape [52, 3, 1]
   let inputTensor = tf.tensor3d(dataArray);
 
-  // Reshape to [1, 52, 3, 1] because your model expects "None, 52, 3, 1"
-  // "None" = batch dimension
-  inputTensor = inputTensor.reshape([1, 52, 3, 1]);
+  // Reshape to [1, 52, 3, 1]
+  inputTensor = inputTensor.reshape([1, TARGET_SAMPLES, 3, 1]);
 
-  // Make prediction
+  // Predict
   const outputTensor = model.predict(inputTensor);
-
-  // Convert the result to JavaScript array
   const predictions = await outputTensor.data();
 
   // Cleanup
@@ -137,32 +154,44 @@ async function runInference() {
   inputTensor.dispose();
 
   console.log('Predictions:', predictions);
-
-  // Display the predictions
-  // If your model returns more than one output, you might iterate over them
   document.getElementById('status').textContent =
     'Inference result: ' + JSON.stringify(Array.from(predictions));
 }
 
 /*****************************************************
- * Main Init Function
+ * initDemo()
+ * - Called once, e.g. at page load or from a button click
  *****************************************************/
 async function initDemo() {
-  // 1. Request motion permission (for iOS)
+  // 1. iOS motion permission
   const granted = await requestMotionPermission();
   if (!granted) {
     document.getElementById('status').textContent = 
       'Permission for motion denied.';
+    console.warn('Cannot proceed without motion permission.');
     return;
   }
 
-  // 2. Load the model
+  // 2. Load model
+  document.getElementById('status').textContent = 'Loading model...';
   await loadModel();
+  if (!model) {
+    document.getElementById('status').textContent = 'Failed to load model.';
+    return;
+  }
+  document.getElementById('status').textContent = 'Model loaded. Starting loop...';
 
-  // 3. Start collecting data
-  //    We'll collect 2 seconds of data for each click, then automatically stop and run inference.
-  startCollectingData();
+  // 3. Start the continuous 2-second data collection loop
+  startLoop();
 }
 
-// Attach init to the "Start" button
-document.getElementById('startButton').addEventListener('click', initDemo);
+/*****************************************************
+ * (Optional) A function to stop the loop gracefully
+ *****************************************************/
+function stopLoop() {
+  console.log('Stop loop called. No further collections will start.');
+  continueLoop = false;
+  // Also remove the devicemotion listener if currently collecting
+  window.removeEventListener('devicemotion', handleMotionEvent, true);
+  document.getElementById('status').textContent = 'Continuous loop stopped.';
+}
