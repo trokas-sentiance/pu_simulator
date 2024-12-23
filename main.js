@@ -6,6 +6,7 @@ let accelData = [];          // Stores the raw accelerometer data
 const TARGET_SAMPLES = 52;   // 52 samples total
 const COLLECTION_TIME = 2000; // 2 seconds
 let continueLoop = true;     // Control variable to stop the loop if desired
+let inferenceCount = 0;
 
 /*****************************************************
  * requestMotionPermission() 
@@ -160,12 +161,8 @@ async function runInference() {
 
   // Build array of shape [52, 3, 1]
   const dataArray = accelData.map(d => [[d.x], [d.y], [d.z]]);
-
   let inputTensor = tf.tensor3d(dataArray); // shape [52, 3, 1]
-  console.log('[runInference] inputTensor shape:', inputTensor.shape);
-
   inputTensor = inputTensor.reshape([1, TARGET_SAMPLES, 3, 1]); 
-  console.log('[runInference] Reshaped to:', inputTensor.shape);
 
   try {
     const outputTensor = model.predict(inputTensor);
@@ -174,13 +171,25 @@ async function runInference() {
     outputTensor.dispose();
     inputTensor.dispose();
 
+    // (Existing) Write to console
     console.log('[runInference] Predictions:', predictions);
+
+    // (Optional) Still update status if you want
     document.getElementById('status').textContent =
-      `Inference result: ${JSON.stringify(Array.from(predictions))}`;
+      `Inference complete. See below for results.`;
+
+    // (NEW) Append the result to our "inference-results" container
+    inferenceCount++;
+    const resultsDiv = document.getElementById('inference-results');
+    const newResult = document.createElement('p');
+    newResult.textContent = `Inference #${inferenceCount}: ${JSON.stringify(Array.from(predictions))}`;
+    resultsDiv.appendChild(newResult);
+
   } catch (err) {
     console.error('[runInference] Error during model.predict():', err);
     document.getElementById('status').textContent =
       `Error during inference: ${err}`;
+
     // Dispose inputTensor if error
     if (inputTensor) inputTensor.dispose();
   }

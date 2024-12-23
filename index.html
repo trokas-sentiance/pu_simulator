@@ -13,6 +13,11 @@
   <p>This page will automatically capture 2 seconds of data, run inference, and repeat.</p>
   
   <div id="status">Initializing...</div>
+
+  <!-- New container to log all inference outputs -->
+  <div id="inference-results" style="margin-top: 1rem; border: 1px solid #ddd; padding: 0.5rem;">
+    <strong>Inference History:</strong>
+  </div>
   
   <!-- Optional STOP button to end the loop -->
   <button onclick="stopContinuousLoop()">Stop Loop</button>
