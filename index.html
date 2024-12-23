@@ -1,21 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8"/>
-  <title>Accelerometer Demo</title>
+  <meta charset="utf-8">
+  <title>Keras Accelerometer Demo</title>
+  <!-- Load TensorFlow.js via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
 </head>
 <body>
-  <h1>Accelerometer Demo (No TFLite Model)</h1>
+  <h1>Keras Accelerometer Demo</h1>
   
-  <p>This demo just captures accelerometer data and displays it in the browser.</p>
-  
-  <!-- Button to request permission (iOS) and start sensor capture -->
+  <p>This demo collects accelerometer data (2s at 26Hz = 52 samples) and runs it through a Keras model in the browser.</p>
+
+  <!-- Button to request permission and start sensor capture -->
   <button id="startButton">Start</button>
   
-  <!-- Status text to show current accelerometer readings -->
+  <!-- Where we display status messages and predictions -->
   <div id="status">No data yet...</div>
   
-  <!-- Main logic script -->
+  <!-- Our main script -->
   <script src="main.js"></script>
 </body>
 </html>
