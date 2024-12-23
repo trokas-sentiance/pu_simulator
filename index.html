@@ -12,6 +12,9 @@
   <h1>Continuous Accelerometer Inference</h1>
   <p>This page will automatically capture 2 seconds of data, run inference, and repeat.</p>
   
+  <!-- Optional STOP button to end the loop -->
+  <button onclick="stopContinuousLoop()">Stop Loop</button>
+  
   <!-- 1) Live status that frequently changes -->
   <div id="status">Initializing...</div>
   
@@ -20,7 +23,6 @@
     <strong>Inference Results:</strong>
   </div>
   
-  <!-- Optional STOP button to end the loop -->
-  <button onclick="stopContinuousLoop()">Stop Loop</button>
+
 </body>
 </html>
