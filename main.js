@@ -215,10 +215,7 @@ async function runInference() {
 
 /*****************************************************
  * initDemo()
- * - Called (once) from the page:
- *   - request permission
- *   - load model
- *   - start the continuous loop
+ * - Called (once) from the Start button
  *****************************************************/
 async function initDemo() {
   console.log('[initDemo] Called!');
